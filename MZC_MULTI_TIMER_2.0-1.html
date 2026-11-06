@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
+  <title>MZC MULTI TIMER 2.0</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel2: #21262d;
+      --border: #30363d;
+      --text: #f0f6fc;
+      --muted: #8b949e;
+      --blue: #1f6feb;
+      --green: #238636;
+      --amber: #9e6a03;
+      --orange: #b35900;
+      --red: #da3633;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .app { max-width: 760px; margin: 0 auto; }
+    header { text-align: center; padding: 8px 0 14px; }
+    h1 { margin: 0; color: #58a6ff; font-size: clamp(22px, 5vw, 30px); letter-spacing: .4px; }
+    .subtitle { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .audio-bar {
+      width: 100%; border: 0; border-radius: 10px; padding: 12px;
+      background: var(--blue); color: white; font-weight: 700; font-size: 14px;
+      cursor: pointer; margin: 0 0 14px;
+    }
+    .audio-bar.ready { background: var(--green); }
+    .dashboard {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
+    }
+    .stat {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 6px; text-align: center;
+    }
+    .stat strong { display: block; font-size: 20px; color: #58a6ff; }
+    .stat span { color: var(--muted); font-size: 11px; }
+    .container { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .card {
+      background: var(--panel); border: 2px solid var(--border); border-radius: 14px;
+      padding: 14px; transition: border-color .2s, background .2s;
+    }
+    .card.running { border-color: #238636; }
+    .card.finished {
+      background: #490202; border-color: #f85149;
+      animation: pulse 1s infinite alternate;
+    }
+    @keyframes pulse {
+      from { box-shadow: 0 0 0 rgba(248,81,73,0); }
+      to { box-shadow: 0 0 14px rgba(248,81,73,.45); border-color: #ff7b72; }
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; margin-bottom: 12px;
+    }
+    .name-btn {
+      background: none; border: 0; color: #58a6ff; font-size: 17px;
+      font-weight: 750; padding: 0; text-align: left; cursor: pointer;
+      min-width: 0; overflow-wrap: anywhere;
+    }
+    .status {
+      color: var(--muted); font-size: 10px; text-transform: uppercase;
+      letter-spacing: .7px; margin-top: 3px;
+    }
+    .time-display {
+      font: 700 clamp(22px, 6vw, 30px)/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: nowrap; color: #fff; text-align: right;
+    }
+    .time-adjust-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 10px;
+    }
+    .btn-adj {
+      background: var(--panel2); border: 1px solid var(--border); color: #c9d1d9;
+      padding: 10px 4px; border-radius: 7px; font-size: 14px; font-weight: 750; cursor: pointer;
+    }
+    .btn-adj:disabled { opacity: .35; cursor: not-allowed; filter: grayscale(1); }
+    button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    button:active { transform: scale(.98); filter: brightness(1.15); }
+    .actions-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 7px; }
+    .action-btn {
+      padding: 12px 8px; border: 0; border-radius: 7px; font-weight: 750;
+      font-size: 14px; color: white; cursor: pointer;
+    }
+    .btn-toggle { background: var(--green); }
+    .btn-toggle.paused { background: var(--amber); }
+    .btn-toggle.running { background: var(--orange); }
+    .btn-stop { background: var(--red); }
+    .btn-reset { background: #475569; }
+    .btn-reset:disabled { opacity: .35; cursor: not-allowed; filter: grayscale(1); }
+    .footer { text-align: center; color: var(--muted); font-size: 11px; padding: 16px 4px 4px; }
+    @media (min-width: 620px) { .container { grid-template-columns: 1fr 1fr; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>⏱️ MZC MULTI TIMER</h1>
+      <div class="subtitle">Version 2.0 · Gestion de 6 écrans</div>
+    </header>
+
+    <button class="audio-bar" id="audioButton" type="button">🔊 Cliquer ici pour activer la voix du système</button>
+
+    <section class="dashboard" aria-label="Résumé des chronomètres">
+      <div class="stat"><strong id="activeCount">0</strong><span>En cours</span></div>
+      <div class="stat"><strong id="pausedCount">0</strong><span>En pause</span></div>
+      <div class="stat"><strong id="finishedCount">0</strong><span>Terminés</span></div>
+    </section>
+
+    <section class="container" id="timers-container" aria-label="Les six chronomètres"></section>
+    <div class="footer">MZC MULTI TIMER · Les données sont sauvegardées sur cet appareil.</div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const STORAGE_KEY = "mzc_timers_v2";
+    const LEGACY_KEY = "mzc_timers";
+    const DEFAULT_TIMERS = Array.from({ length: 6 }, (_, i) => ({
+      id: i + 1, name: `Écran ${i + 1}`, seconds: 0, initialSeconds: 0,
+      running: false, finished: false, targetEndTimestamp: 0, startedAtTimestamp: 0,
+      runStartedAtTimestamp: 0, elapsedSeconds: 0, last20MinuteMark: 0,
+      warning5Sent: false, durationLocked: false
+    }));
+
+    let timers = loadTimers();
+    let audioReady = false;
+    let lastAnnouncementAt = 0;
+
+    function loadTimers() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_KEY);
+        if (!raw) return structuredCloneSafe(DEFAULT_TIMERS);
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return structuredCloneSafe(DEFAULT_TIMERS);
+
+        const normalized = DEFAULT_TIMERS.map(base => {
+          const old = parsed.find(item => Number(item.id) === base.id) || {};
+          const t = { ...base, ...old };
+          t.id = base.id;
+          t.name = typeof t.name === "string" && t.name.trim() ? t.name.trim() : base.name;
+          t.seconds = Math.max(0, Math.floor(Number(t.seconds) || 0));
+          t.initialSeconds = Math.max(0, Math.floor(Number(t.initialSeconds) || t.seconds));
+          t.running = Boolean(t.running);
+          t.finished = Boolean(t.finished);
+          t.targetEndTimestamp = Math.max(0, Number(t.targetEndTimestamp) || 0);
+          t.startedAtTimestamp = Math.max(0, Number(t.startedAtTimestamp) || 0);
+          t.runStartedAtTimestamp = Math.max(0, Number(t.runStartedAtTimestamp) || 0);
+          t.elapsedSeconds = Math.max(0, Math.floor(Number(t.elapsedSeconds) || 0));
+          t.last20MinuteMark = Math.max(0, Math.floor(Number(t.last20MinuteMark) || 0));
+          t.warning5Sent = Boolean(t.warning5Sent);
+          // Un chronomètre déjà en marche dans une ancienne sauvegarde est verrouillé.
+          t.durationLocked = Boolean(t.durationLocked) || t.running;
+          return t;
+        });
+
+        const now = Date.now();
+        normalized.forEach(t => {
+          if (t.running) {
+            t.seconds = Math.max(0, Math.ceil((t.targetEndTimestamp - now) / 1000));
+            if (t.seconds <= 0) {
+              t.seconds = 0; t.running = false; t.finished = true;
+              t.runStartedAtTimestamp = 0;
+            } else if (!t.runStartedAtTimestamp) {
+              // Compatibilité avec les anciennes sauvegardes en cours.
+              t.runStartedAtTimestamp = now;
+            }
+          }
+        });
+        return normalized;
+      } catch (error) {
+        console.warn("Sauvegarde illisible, démarrage avec les réglages par défaut.", error);
+        return structuredCloneSafe(DEFAULT_TIMERS);
+      }
+    }
+
+    function structuredCloneSafe(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function saveToStorage() {
+      try {
+        const snapshot = JSON.stringify(timers);
+        localStorage.setItem(STORAGE_KEY, snapshot);
+        // Dans l'APK Android, le service natif surveille les échéances même
+        // lorsque WebView est suspendu ou que l'écran est verrouillé.
+        if (window.MZCNative && typeof window.MZCNative.syncTimers === "function") {
+          window.MZCNative.syncTimers(snapshot);
+        }
+      } catch (error) {
+        console.warn("Impossible de sauvegarder les chronomètres.", error);
+      }
+    }
+
+    function formatTime(totalSeconds) {
+      const s = Math.max(0, Math.floor(totalSeconds));
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
+    }
+
+    function speak(text, repeat = 1) {
+      // Dans l'APK, les annonces sont prises en charge par TextToSpeech Android
+      // afin de continuer en arrière-plan. Évite les annonces en double dans WebView.
+      if (window.MZCNative && typeof window.MZCNative.syncTimers === "function") return;
+      if (!("speechSynthesis" in window) || !audioReady) return;
+      window.speechSynthesis.cancel();
+      for (let i = 0; i < repeat; i++) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "fr-FR";
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function frenchRemainingTime(totalSeconds) {
+      const minutes = Math.max(0, Math.ceil(totalSeconds / 60));
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+      const parts = [];
+      if (hours > 0) parts.push(`${hours} heure${hours > 1 ? "s" : ""}`);
+      if (rest > 0) parts.push(`${rest} minute${rest > 1 ? "s" : ""}`);
+      return parts.join(" ");
+    }
+
+    function endAnnouncement(t) {
+      return `Écran ${t.id}, nous sommes honorés de votre visite, votre temps de jeu s'est malheureusement épuisé, veuillez déposer les manettes.`;
+    }
+
+    function initAudio() {
+      if (!("speechSynthesis" in window)) {
+        alert("La synthèse vocale n'est pas disponible dans ce navigateur.");
+        return;
+      }
+      audioReady = true;
+      const button = document.getElementById("audioButton");
+      button.classList.add("ready");
+      button.textContent = "✅ Système vocal prêt et actif";
+      speak("Système vocal MZC activé.");
+    }
+
+    function render() {
+      const container = document.getElementById("timers-container");
+      container.innerHTML = "";
+
+      timers.forEach(t => {
+        const card = document.createElement("article");
+        card.className = `card${t.running ? " running" : ""}${t.finished ? " finished" : ""}`;
+
+        let status = "Prêt";
+        if (t.running) status = "En cours";
+        else if (t.finished) status = "Temps écoulé";
+        else if (t.seconds > 0) status = "En pause";
+
+        let toggleText = "Activer";
+        let toggleClass = "btn-toggle";
+        if (t.running) {
+          toggleText = "Pause";
+          toggleClass += " running";
+        } else if (t.seconds > 0 && !t.finished && t.durationLocked) {
+          // « Reprendre » est réservé à un poste réellement mis en pause.
+          // Une durée simplement réglée conserve le bouton « Activer ».
+          toggleText = "Reprendre";
+          toggleClass += " paused";
+        }
+
+        // Après expiration, les ajouts de durée sont de nouveau disponibles.
+        // Après ajout, le bouton reste sur « Activer » jusqu'au redémarrage.
+        const additionsDisabled = t.running || (t.durationLocked && !t.finished);
+        const adjust = `
+          <div class="time-adjust-grid" aria-label="Ajouter du temps">
+            <button class="btn-adj" type="button" data-action="add" data-id="${t.id}" data-seconds="1200" ${additionsDisabled ? "disabled" : ""}>+20 min</button>
+            <button class="btn-adj" type="button" data-action="add" data-id="${t.id}" data-seconds="1800" ${additionsDisabled ? "disabled" : ""}>+30 min</button>
+            <button class="btn-adj" type="button" data-action="add" data-id="${t.id}" data-seconds="3600" ${additionsDisabled ? "disabled" : ""}>+1 h</button>
+          </div>`;
+
+        // La réinitialisation est bloquée pendant la marche et pendant une pause.
+        // Elle reste disponible avant le démarrage et après expiration.
+        const resetDisabled = t.running || (t.durationLocked && !t.finished);
+
+        card.innerHTML = `
+          <div class="card-header">
+            <div>
+              <button class="name-btn" type="button" data-action="rename" data-id="${t.id}">✏️ ${escapeHtml(t.name)}</button>
+              <div class="status">${status}</div>
+            </div>
+            <div class="time-display" role="timer" aria-live="off">${t.finished ? "00:00:00 (FIN)" : formatTime(t.seconds)}</div>
+          </div>
+          ${adjust}
+          <div class="actions-grid">
+            <button class="action-btn ${toggleClass}" type="button" data-action="toggle" data-id="${t.id}">${toggleText}</button>
+            <button class="action-btn btn-stop" type="button" data-action="stop" data-id="${t.id}">Arrêter</button>
+            <button class="action-btn btn-reset" type="button" data-action="reset" data-id="${t.id}" ${resetDisabled ? "disabled" : ""}>Réinitialiser</button>
+          </div>`;
+        container.appendChild(card);
+      });
+
+      document.getElementById("activeCount").textContent = timers.filter(t => t.running).length;
+      document.getElementById("pausedCount").textContent = timers.filter(t => !t.running && !t.finished && t.seconds > 0).length;
+      document.getElementById("finishedCount").textContent = timers.filter(t => t.finished).length;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+      })[char]);
+    }
+
+    function getTimer(id) {
+      return timers.find(t => t.id === Number(id));
+    }
+
+    function adjustTime(id, secondsToAdd) {
+      const t = getTimer(id);
+      // Après la fin, on autorise l'ajout d'une nouvelle durée
+      // afin de pouvoir réactiver directement le poste.
+      if (!t || t.running || (t.durationLocked && !t.finished)) return;
+
+      if (t.finished) {
+        t.finished = false;
+        t.durationLocked = false;
+        t.elapsedSeconds = 0;
+        t.last20MinuteMark = 0;
+        t.warning5Sent = false;
+      }
+
+      t.seconds += secondsToAdd;
+      t.initialSeconds = t.seconds;
+      saveToStorage();
+      render();
+    }
+
+    function toggleTimer(id) {
+      const t = getTimer(id);
+      if (!t) return;
+
+      if (t.finished) {
+        alert("Ce poste est terminé. Cliquez sur « Arrêter » pour le réinitialiser.");
+        return;
+      }
+      if (t.seconds <= 0) {
+        alert("Veuillez d'abord ajouter du temps : +20 min, +30 min ou +1 h.");
+        return;
+      }
+
+      const now = Date.now();
+      if (t.running) {
+        t.seconds = Math.max(0, Math.ceil((t.targetEndTimestamp - now) / 1000));
+        t.elapsedSeconds += Math.max(0, Math.floor((now - t.runStartedAtTimestamp) / 1000));
+        t.running = false;
+        t.targetEndTimestamp = 0;
+        t.runStartedAtTimestamp = 0;
+        t.startedAtTimestamp = 0;
+      } else {
+        t.running = true;
+        t.durationLocked = true;
+        t.runStartedAtTimestamp = now;
+        t.startedAtTimestamp = now;
+        t.targetEndTimestamp = now + t.seconds * 1000;
+      }
+      saveToStorage();
+      render();
+    }
+
+    function stopTimer(id) {
+      const t = getTimer(id);
+      if (!t) return;
+      t.running = false;
+      t.finished = false;
+      t.durationLocked = false;
+      t.seconds = t.initialSeconds;
+      t.targetEndTimestamp = 0;
+      t.startedAtTimestamp = 0;
+      t.runStartedAtTimestamp = 0;
+      t.elapsedSeconds = 0;
+      t.last20MinuteMark = 0;
+      t.warning5Sent = false;
+      if (!timers.some(item => item.finished)) window.speechSynthesis?.cancel();
+      saveToStorage();
+      render();
+    }
+
+    function resetTimer(id) {
+      const t = getTimer(id);
+      // Sécurité supplémentaire : impossible de réinitialiser un poste en marche ou en pause.
+      if (!t || t.running || (t.durationLocked && !t.finished)) return;
+      t.running = false;
+      t.finished = false;
+      t.seconds = 0;
+      t.initialSeconds = 0;
+      t.targetEndTimestamp = 0;
+      t.startedAtTimestamp = 0;
+      t.runStartedAtTimestamp = 0;
+      t.elapsedSeconds = 0;
+      t.last20MinuteMark = 0;
+      t.warning5Sent = false;
+      t.durationLocked = false;
+      if (!timers.some(item => item.finished)) window.speechSynthesis?.cancel();
+      saveToStorage();
+      render();
+    }
+
+    function renameTimer(id) {
+      const t = getTimer(id);
+      if (!t) return;
+      const newName = prompt("Nouveau nom du poste (ex. Écran 5) :", t.name);
+      if (newName === null) return;
+      const cleaned = newName.trim();
+      if (!cleaned) {
+        alert("Le nom ne peut pas être vide.");
+        return;
+      }
+      t.name = cleaned.slice(0, 40);
+      saveToStorage();
+      render();
+    }
+
+    document.getElementById("audioButton").addEventListener("click", initAudio);
+
+    document.getElementById("timers-container").addEventListener("click", event => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const id = Number(button.dataset.id);
+      switch (button.dataset.action) {
+        case "add": adjustTime(id, Number(button.dataset.seconds)); break;
+        case "toggle": toggleTimer(id); break;
+        case "stop": stopTimer(id); break;
+        case "reset": resetTimer(id); break;
+        case "rename": renameTimer(id); break;
+      }
+    });
+
+    // Décompte basé sur une heure cible pour rester exact même si le navigateur ralentit.
+    // Les annonces intermédiaires sont calculées sur le temps réellement écoulé,
+    // en conservant leur progression pendant les pauses.
+    function tick() {
+      const now = Date.now();
+      let changed = false;
+
+      timers.forEach(t => {
+        if (!t.running) return;
+
+        const remaining = Math.max(0, Math.ceil((t.targetEndTimestamp - now) / 1000));
+        const elapsed = t.elapsedSeconds + Math.max(0, Math.floor((now - t.runStartedAtTimestamp) / 1000));
+        if (remaining !== t.seconds) {
+          t.seconds = remaining;
+          changed = true;
+        }
+
+        if (remaining <= 0) {
+          t.seconds = 0;
+          t.running = false;
+          t.finished = true;
+          t.targetEndTimestamp = 0;
+          t.startedAtTimestamp = 0;
+          t.runStartedAtTimestamp = 0;
+          changed = true;
+          speak(endAnnouncement(t));
+          lastAnnouncementAt = now;
+          return;
+        }
+
+        const completed20MinuteMarks = Math.floor(elapsed / 1200);
+        if (completed20MinuteMarks > t.last20MinuteMark) {
+          t.last20MinuteMark = completed20MinuteMarks;
+          if (remaining > 300) {
+            speak(`${t.name}, il vous reste ${frenchRemainingTime(remaining)}.`, 2);
+            lastAnnouncementAt = now;
+          }
+          changed = true;
+        }
+
+        if (remaining <= 300 && !t.warning5Sent) {
+          t.warning5Sent = true;
+          speak(`Cher client de l'${t.name}, il ne vous reste plus que cinq minutes de temps de jeu, vous pouvez l'augmenter si vous désirez encore continuer à jouer.`);
+          lastAnnouncementAt = now;
+          changed = true;
+        }
+      });
+
+      // Une annonce de fin est répétée jusqu'à l'action manuelle Arrêter/Réinitialiser.
+      const finishedTimers = timers.filter(t => t.finished);
+      if (finishedTimers.length && now - lastAnnouncementAt >= 12000) {
+        speak(endAnnouncement(finishedTimers[0]));
+        lastAnnouncementAt = now;
+      }
+
+      if (changed) {
+        saveToStorage();
+        render();
+      }
+    }
+
+    // Recalcul immédiat quand l'application revient au premier plan.
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) tick();
+    });
+    window.addEventListener("pageshow", tick);
+
+    render();
+    saveToStorage(); // Synchronise aussi les chronomètres restaurés avec Android.
+    tick();
+    setInterval(tick, 250);
+  </script>
+</body>
+</html>
