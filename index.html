@@ -516,6 +516,14 @@
     saveToStorage(); // Synchronise aussi les chronomètres restaurés avec Android.
     tick();
     setInterval(tick, 250);
-  </script>
+  </script> 
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .catch(error => console.error("Erreur Service Worker :", error));
+  });
+}
+</script>
 </body>
 </html>
